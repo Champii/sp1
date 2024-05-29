@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{Seek, Write};
 use web_time::Instant;
 
-use crate::air::MachineAir;
+use crate::air::{MachineAir, PublicValues};
 use crate::io::{SP1PublicValues, SP1Stdin};
 pub use baby_bear_blake3::BabyBearBlake3;
 use p3_challenger::CanObserve;
@@ -127,6 +127,13 @@ where
 fn trace_checkpoint(program: Program, file: &File) -> ExecutionRecord {
     let mut reader = std::io::BufReader::new(file);
     let state = bincode::deserialize_from(&mut reader).expect("failed to deserialize state");
+    let mut runtime = Runtime::recover(program.clone(), state);
+    let (events, _) = tracing::debug_span!("runtime.trace").in_scope(|| runtime.execute_record());
+    events
+}
+
+fn trace_checkpoint_raw(program: Program, checkpoint: Vec<u8>) -> ExecutionRecord {
+    let state = bincode::deserialize(&checkpoint).expect("failed to deserialize state");
     let mut runtime = Runtime::recover(program.clone(), state);
     let (events, _) = tracing::debug_span!("runtime.trace").in_scope(|| runtime.execute_record());
     events
@@ -272,6 +279,230 @@ where
     let proof = crate::stark::MachineProof::<SC> { shard_proofs };
 
     // Prove the program.
+    let nb_bytes = bincode::serialize(&proof).unwrap().len();
+
+    tracing::info!(
+        "summary: cycles={}, e2e={}, khz={:.2}, proofSize={}",
+        cycles,
+        prove_time,
+        (cycles as f64 / prove_time as f64),
+        Size::from_bytes(nb_bytes),
+    );
+
+    (proof, public_values_stream)
+}
+use serde::Deserialize;
+// Define ShardData which needs data necessary for each shard processing
+#[derive(Serialize, Deserialize)]
+pub struct ShardData {
+    pub program: Program,
+    pub checkpoint: Vec<u8>,
+    pub public_values: PublicValues<u32, u32>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ShardProofResult {
+    pub shard_proofs: Vec<ShardProofData>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ShardProofData {
+    pub proof: Vec<u8>,
+    pub commitment: Vec<u8>,
+}
+
+impl ShardData {
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
+    }
+
+    pub fn deserialize(bytes: &[u8]) -> Self {
+        bincode::deserialize(bytes).unwrap()
+    }
+}
+
+impl ShardProofResult {
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
+    }
+
+    pub fn deserialize(bytes: &[u8]) -> Self {
+        bincode::deserialize(bytes).unwrap()
+    }
+}
+
+// Use the provided structs in your primary code logic
+fn process_shard(shard_data: ShardData) -> Result<ShardProofResult, Box<dyn std::error::Error>> {
+    let ShardData {
+        program,
+        checkpoint,
+        public_values,
+    } = shard_data;
+
+    let config = BabyBearPoseidon2::default();
+
+    // Recreate events and reset seek on the checkpoint file
+    let mut events = trace_checkpoint_raw(program.clone(), checkpoint);
+    events.public_values = public_values;
+
+    let machine = RiscvAir::machine(config);
+    let (pk, vk) = machine.setup(&program);
+    let sharding_config = ShardingConfig::default();
+
+    let shards = machine.shard(events, &sharding_config);
+
+    let (commitments, _commit_data) = LocalProver::commit_shards(&machine, &shards);
+
+    let shard_proofs = shards
+        .into_iter()
+        .map(|shard| {
+            let config = machine.config();
+            let shard_main_data =
+                LocalProver::commit_main(config, &machine, &shard, shard.index() as usize);
+
+            let chip_ordering = shard_main_data.chip_ordering.clone();
+            let ordered_chips = machine
+                .shard_chips_ordered(&chip_ordering)
+                .collect::<Vec<_>>()
+                .to_vec();
+
+            let commitment = bincode::serialize(&shard_main_data.main_commit).unwrap();
+
+            let proof = LocalProver::prove_shard(
+                config,
+                &pk,
+                &ordered_chips,
+                shard_main_data,
+                &mut config.challenger(),
+            );
+
+            ShardProofData {
+                proof: bincode::serialize(&proof).unwrap(),
+                commitment,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let proof_result = ShardProofResult { shard_proofs };
+
+    Ok(proof_result)
+}
+
+fn distribute_shards_to_workers<SC>(shards: Vec<ShardData>) -> Vec<ShardProof<SC>>
+where
+    SC: StarkGenericConfig + Send + Sync,
+    SC::Challenger: Clone,
+    OpeningProof<SC>: Send + Sync,
+    Com<SC>: Send + Sync,
+    PcsProverData<SC>: Send + Sync,
+    ShardMainData<SC>: Serialize + DeserializeOwned,
+    <SC as StarkGenericConfig>::Val: PrimeField32,
+{
+    let mut shard_proofs = Vec::new();
+    for shard_data in shards {
+        let shard_proof = process_shard(shard_data).unwrap();
+        for proof_data in &shard_proof.shard_proofs {
+            let proof: ShardProof<SC> = bincode::deserialize(&proof_data.proof).unwrap();
+            shard_proofs.push(proof);
+        }
+    }
+    shard_proofs
+}
+
+pub fn run_and_prove2<SC: StarkGenericConfig + Send + Sync>(
+    program: Program,
+    stdin: &SP1Stdin,
+    config: SC,
+) -> (crate::stark::MachineProof<SC>, Vec<u8>)
+where
+    SC::Challenger: Clone,
+    OpeningProof<SC>: Send + Sync,
+    Com<SC>: Send + Sync,
+    PcsProverData<SC>: Send + Sync,
+    ShardMainData<SC>: Serialize + DeserializeOwned,
+    <SC as StarkGenericConfig>::Val: PrimeField32,
+{
+    let mut challenger = config.challenger();
+
+    let machine = RiscvAir::machine(config);
+    let mut runtime = Runtime::new(program.clone());
+    runtime.write_vecs(&stdin.buffer);
+    for proof in stdin.proofs.iter() {
+        runtime.write_proof(proof.0.clone(), proof.1.clone());
+    }
+    let (pk, vk) = machine.setup(runtime.program.as_ref());
+    let should_batch = shard_batch_size() > 0;
+
+    if !should_batch {
+        runtime.run();
+        #[cfg(feature = "debug")]
+        {
+            let record_clone = runtime.record.clone();
+            machine.debug_constraints(&pk, record_clone, &mut challenger);
+        }
+        let public_values = std::mem::take(&mut runtime.state.public_values_stream);
+        let proof = prove_core(machine.config().clone(), runtime);
+        return (proof, public_values);
+    }
+
+    let mut cycles = 0;
+    let mut prove_time = 0;
+    let mut checkpoints = Vec::new();
+    let (public_values_stream, public_values) =
+        tracing::info_span!("runtime.state").in_scope(|| loop {
+            let (state, done) = runtime.execute_state();
+            let checkpoint = bincode::serialize(&state).expect("failed to serialize state");
+            checkpoints.push(checkpoint);
+            if done {
+                return (
+                    std::mem::take(&mut runtime.state.public_values_stream),
+                    runtime.record.public_values,
+                );
+            }
+        });
+
+    let sharding_config = ShardingConfig::default();
+    let mut shard_main_datas = Vec::new();
+
+    let reuse_shards = checkpoints.len() == 1;
+    let mut all_shards = None;
+
+    vk.observe_into(&mut challenger);
+    for (i, checkpoint_data) in checkpoints.iter().enumerate() {
+        let mut events = trace_checkpoint_raw(program.clone(), checkpoint_data.clone());
+        events.public_values = public_values.clone();
+
+        cycles += events.cpu_events.len();
+        let shards =
+            tracing::debug_span!("shard").in_scope(|| machine.shard(events, &sharding_config));
+        let (commitments, commit_data) = tracing::info_span!("commit")
+            .in_scope(|| LocalProver::commit_shards(&machine, &shards));
+
+        shard_main_datas.push(commit_data);
+
+        if reuse_shards {
+            all_shards = Some(shards.clone());
+        }
+
+        for (commitment, shard) in commitments.into_iter().zip(shards.iter()) {
+            challenger.observe(commitment);
+            challenger.observe_slice(&shard.public_values::<SC::Val>()[0..machine.num_pv_elts()]);
+        }
+    }
+
+    let shard_proofs: Vec<ShardProof<SC>> = distribute_shards_to_workers::<SC>(
+        checkpoints
+            .into_iter()
+            .map(|checkpoint| ShardData {
+                program: program.clone(),
+                checkpoint: checkpoint.clone(),
+                public_values: public_values.clone(),
+            })
+            .collect(),
+    );
+
+    let proof = crate::stark::MachineProof::<SC> { shard_proofs };
+
     let nb_bytes = bincode::serialize(&proof).unwrap().len();
 
     tracing::info!(
