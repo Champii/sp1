@@ -336,8 +336,8 @@ impl ShardProofResult {
 // Use the provided structs in your primary code logic
 fn process_shard<SC>(
     shard_data: ShardData,
-    pk: &StarkProvingKey<SC>,
-    machine: &StarkMachine<SC, RiscvAir<<SC as StarkGenericConfig>::Val>>,
+    _pk: &StarkProvingKey<SC>,
+    _machine: &StarkMachine<SC, RiscvAir<<SC as StarkGenericConfig>::Val>>,
     challenger: &mut SC::Challenger,
 ) -> Result<ShardProofResult, Box<dyn std::error::Error>>
 where
@@ -357,15 +357,15 @@ where
         // config,
     } = shard_data;
 
-    // let config = SC::default();
+    let config = SC::default();
 
     println!("TRACE CHECKPOINT");
     // Recreate events and reset seek on the checkpoint file
     let mut events = trace_checkpoint_raw(program.clone(), &checkpoint);
     events.public_values = public_values;
 
-    // let machine = RiscvAir::machine(config);
-    // let (pk, vk) = machine.setup(&program);
+    let machine = RiscvAir::machine(config);
+    let (pk, vk) = machine.setup(&program);
     // println!("PK SIZE {:#?}", bincode::serialize(&pk).unwrap().len());
 
     let sharding_config = ShardingConfig::default();
@@ -398,7 +398,7 @@ where
             println!("PROVE");
             let proof = LocalProver::prove_shard(
                 config,
-                pk,
+                &pk,
                 &ordered_chips,
                 shard_main_data,
                 &mut challenger.clone(),
