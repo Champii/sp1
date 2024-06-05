@@ -31,7 +31,7 @@ pub use sp1_core::io::{SP1PublicValues, SP1Stdin};
 use sp1_core::runtime::Runtime;
 use sp1_core::stark::MachineVerificationError;
 use sp1_core::stark::{Challenge, StarkProvingKey};
-use sp1_core::utils::DIGEST_SIZE;
+use sp1_core::utils::{run_and_prove2, DIGEST_SIZE};
 use sp1_core::{
     runtime::Program,
     stark::{
@@ -234,7 +234,7 @@ impl SP1Prover {
     pub fn prove_core(&self, pk: &SP1ProvingKey, stdin: &SP1Stdin) -> SP1CoreProof {
         let config = CoreSC::default();
         let program = Program::from(&pk.elf);
-        let (proof, public_values_stream) = run_and_prove(program, stdin, config);
+        let (proof, public_values_stream) = run_and_prove2(program, stdin, config);
         let public_values = SP1PublicValues::from(&public_values_stream);
         SP1CoreProof {
             proof: SP1CoreProofData(proof.shard_proofs),

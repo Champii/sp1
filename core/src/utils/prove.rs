@@ -132,8 +132,8 @@ fn trace_checkpoint(program: Program, file: &File) -> ExecutionRecord {
     events
 }
 
-fn trace_checkpoint_raw(program: Program, checkpoint: Vec<u8>) -> ExecutionRecord {
-    let state = bincode::deserialize(&checkpoint).expect("failed to deserialize state");
+fn trace_checkpoint_raw(program: Program, checkpoint: &Vec<u8>) -> ExecutionRecord {
+    let state = bincode::deserialize(checkpoint).expect("failed to deserialize state");
     let mut runtime = Runtime::recover(program.clone(), state);
     let (events, _) = tracing::debug_span!("runtime.trace").in_scope(|| runtime.execute_record());
     events
@@ -293,11 +293,13 @@ where
 }
 use serde::Deserialize;
 // Define ShardData which needs data necessary for each shard processing
-#[derive(Serialize, Deserialize)]
+// #[derive(Serialize, Deserialize)]
 pub struct ShardData {
     pub program: Program,
     pub checkpoint: Vec<u8>,
     pub public_values: PublicValues<u32, u32>,
+    // pub pk: StarkProvingKey<SC>,
+    // pub config: SC,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -308,10 +310,10 @@ pub struct ShardProofResult {
 #[derive(Serialize, Deserialize)]
 pub struct ShardProofData {
     pub proof: Vec<u8>,
-    pub commitment: Vec<u8>,
+    // pub commitment: Vec<u8>,
 }
 
-impl ShardData {
+/* impl ShardData {
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(self).unwrap()
     }
@@ -319,7 +321,7 @@ impl ShardData {
     pub fn deserialize(bytes: &[u8]) -> Self {
         bincode::deserialize(bytes).unwrap()
     }
-}
+} */
 
 impl ShardProofResult {
     pub fn serialize(&self) -> Vec<u8> {
@@ -332,53 +334,80 @@ impl ShardProofResult {
 }
 
 // Use the provided structs in your primary code logic
-fn process_shard(shard_data: ShardData) -> Result<ShardProofResult, Box<dyn std::error::Error>> {
+fn process_shard<SC>(
+    shard_data: ShardData,
+    pk: &StarkProvingKey<SC>,
+    machine: &StarkMachine<SC, RiscvAir<<SC as StarkGenericConfig>::Val>>,
+    challenger: &mut SC::Challenger,
+) -> Result<ShardProofResult, Box<dyn std::error::Error>>
+where
+    SC: StarkGenericConfig + Send + Sync + Default,
+    SC::Challenger: Clone,
+    OpeningProof<SC>: Send + Sync,
+    Com<SC>: Send + Sync,
+    PcsProverData<SC>: Send + Sync,
+    ShardMainData<SC>: Serialize + DeserializeOwned,
+    <SC as StarkGenericConfig>::Val: PrimeField32,
+{
     let ShardData {
         program,
         checkpoint,
         public_values,
+        // pk,
+        // config,
     } = shard_data;
 
-    let config = BabyBearPoseidon2::default();
+    // let config = SC::default();
 
+    println!("TRACE CHECKPOINT");
     // Recreate events and reset seek on the checkpoint file
-    let mut events = trace_checkpoint_raw(program.clone(), checkpoint);
+    let mut events = trace_checkpoint_raw(program.clone(), &checkpoint);
     events.public_values = public_values;
 
-    let machine = RiscvAir::machine(config);
-    let (pk, vk) = machine.setup(&program);
+    // let machine = RiscvAir::machine(config);
+    // let (pk, vk) = machine.setup(&program);
+    // println!("PK SIZE {:#?}", bincode::serialize(&pk).unwrap().len());
+
     let sharding_config = ShardingConfig::default();
 
+    println!("DEDUCE SHARDS");
     let shards = machine.shard(events, &sharding_config);
 
-    let (commitments, _commit_data) = LocalProver::commit_shards(&machine, &shards);
+    // let (commitments, _commit_data) = LocalProver::commit_shards(&machine, &shards);
+    let len = shards.len();
 
     let shard_proofs = shards
         .into_iter()
-        .map(|shard| {
+        .enumerate()
+        .map(|(i, shard)| {
+            println!("PROCESSING SHARD {}/{}", i + 1, len);
             let config = machine.config();
+            println!("COMMIT");
             let shard_main_data =
                 LocalProver::commit_main(config, &machine, &shard, shard.index() as usize);
 
+            println!("ORDERING");
             let chip_ordering = shard_main_data.chip_ordering.clone();
             let ordered_chips = machine
                 .shard_chips_ordered(&chip_ordering)
                 .collect::<Vec<_>>()
                 .to_vec();
 
-            let commitment = bincode::serialize(&shard_main_data.main_commit).unwrap();
+            // let commitment = bincode::serialize(&shard_main_data.main_commit).unwrap();
 
+            println!("PROVE");
             let proof = LocalProver::prove_shard(
                 config,
-                &pk,
+                pk,
                 &ordered_chips,
                 shard_main_data,
-                &mut config.challenger(),
+                &mut challenger.clone(),
             );
+            println!("PROVE DONE");
 
             ShardProofData {
                 proof: bincode::serialize(&proof).unwrap(),
-                commitment,
+                // commitment,
             }
         })
         .collect::<Vec<_>>();
@@ -388,9 +417,14 @@ fn process_shard(shard_data: ShardData) -> Result<ShardProofResult, Box<dyn std:
     Ok(proof_result)
 }
 
-fn distribute_shards_to_workers<SC>(shards: Vec<ShardData>) -> Vec<ShardProof<SC>>
+fn distribute_shards_to_workers<SC>(
+    shards: Vec<ShardData>,
+    pk: &StarkProvingKey<SC>,
+    machine: &StarkMachine<SC, RiscvAir<<SC as StarkGenericConfig>::Val>>,
+    challenger: &mut SC::Challenger,
+) -> Vec<ShardProof<SC>>
 where
-    SC: StarkGenericConfig + Send + Sync,
+    SC: StarkGenericConfig + Send + Sync + Default,
     SC::Challenger: Clone,
     OpeningProof<SC>: Send + Sync,
     Com<SC>: Send + Sync,
@@ -399,8 +433,11 @@ where
     <SC as StarkGenericConfig>::Val: PrimeField32,
 {
     let mut shard_proofs = Vec::new();
-    for shard_data in shards {
-        let shard_proof = process_shard(shard_data).unwrap();
+    let len = shards.len();
+    for (i, shard_data) in shards.into_iter().enumerate() {
+        println!("CHECKPOINT {}/{}", i + 1, len);
+        let shard_proof = process_shard(shard_data, pk, machine, challenger).unwrap();
+        println!("CHECKPOINT PROOF");
         for proof_data in &shard_proof.shard_proofs {
             let proof: ShardProof<SC> = bincode::deserialize(&proof_data.proof).unwrap();
             shard_proofs.push(proof);
@@ -409,7 +446,7 @@ where
     shard_proofs
 }
 
-pub fn run_and_prove2<SC: StarkGenericConfig + Send + Sync>(
+pub fn run_and_prove2<SC: StarkGenericConfig + Send + Sync + Default>(
     program: Program,
     stdin: &SP1Stdin,
     config: SC,
@@ -469,8 +506,8 @@ where
 
     vk.observe_into(&mut challenger);
     for (i, checkpoint_data) in checkpoints.iter().enumerate() {
-        let mut events = trace_checkpoint_raw(program.clone(), checkpoint_data.clone());
-        events.public_values = public_values.clone();
+        let mut events = trace_checkpoint_raw(program.clone(), &checkpoint_data);
+        events.public_values = public_values;
 
         cycles += events.cpu_events.len();
         let shards =
@@ -497,8 +534,13 @@ where
                 program: program.clone(),
                 checkpoint: checkpoint.clone(),
                 public_values: public_values.clone(),
+                // pk: pk.clone(),
+                // config: machine.config().clone(),
             })
             .collect(),
+        &pk,
+        &machine,
+        &mut challenger,
     );
 
     let proof = crate::stark::MachineProof::<SC> { shard_proofs };

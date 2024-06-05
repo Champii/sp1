@@ -43,6 +43,9 @@ pub type PcsProverData<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
     <SC as StarkGenericConfig>::Challenger,
 >>::ProverData;
 
+/* #[derive(Serialize)]
+pub struct PcsProverDataWrapper<SC: StarkGenericConfig + Serialize>(pub PcsProverData<SC>); */
+
 pub type Challenge<SC> = <SC as StarkGenericConfig>::Challenge;
 pub type Challenger<SC> = <SC as StarkGenericConfig>::Challenger;
 

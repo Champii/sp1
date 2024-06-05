@@ -10,6 +10,7 @@ use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Dimensions;
 use p3_matrix::Matrix;
 use p3_maybe_rayon::prelude::*;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use std::cmp::Reverse;
@@ -63,10 +64,24 @@ impl<SC: StarkGenericConfig, A> StarkMachine<SC, A> {
     }
 }
 
+/* #[derive(serde::Serialize)]
+#[serde(remote = "StarkProvingKey")]
+struct Bar<SC: StarkGenericConfig> {
+    // #[serde(getter = "StarkProvingKey::commit")]
+    pub commit: Com<SC>,
+    pub pc_start: Val<SC>,
+    pub traces: Vec<RowMajorMatrix<Val<SC>>>,
+    pub data: PcsProverData<SC>,
+    pub chip_ordering: HashMap<String, usize>,
+} */
+
+/* #[derive(Serialize)]
+#[serde(bound = "SC: StarkGenericConfig")] */
 pub struct StarkProvingKey<SC: StarkGenericConfig> {
     pub commit: Com<SC>,
     pub pc_start: Val<SC>,
     pub traces: Vec<RowMajorMatrix<Val<SC>>>,
+    // #[serde(skip)]
     pub data: PcsProverData<SC>,
     pub chip_ordering: HashMap<String, usize>,
 }
@@ -157,6 +172,8 @@ impl<SC: StarkGenericConfig, A: MachineAir<Val<SC>>> StarkMachine<SC, A> {
     /// to the program code and other preprocessed colunms such as lookup tables.
     #[instrument("setup machine", level = "info", skip_all)]
     pub fn setup(&self, program: &A::Program) -> (StarkProvingKey<SC>, StarkVerifyingKey<SC>) {
+        println!("SETUP");
+
         let mut named_preprocessed_traces = tracing::debug_span!("generate preprocessed traces")
             .in_scope(|| {
                 self.chips()
@@ -182,6 +199,11 @@ impl<SC: StarkGenericConfig, A: MachineAir<Val<SC>>> StarkMachine<SC, A> {
                     .collect::<Vec<_>>()
             });
 
+        println!(
+            "NAME PREPROCESSED TRACES: {:#?}",
+            named_preprocessed_traces.len()
+        );
+
         // Order the chips and traces by trace size (biggest first), and get the ordering map.
         named_preprocessed_traces.sort_by_key(|(_, trace)| Reverse(trace.height()));
 
@@ -198,9 +220,15 @@ impl<SC: StarkGenericConfig, A: MachineAir<Val<SC>>> StarkMachine<SC, A> {
             })
             .unzip();
 
+        println!("CHIP INFORMATION: {:?}", chip_information.len());
+        println!("DOMAINS AND TRACES: {:?}", domains_and_traces.len());
+
         // Commit to the batch of traces.
         let (commit, data) = tracing::debug_span!("commit to preprocessed traces")
             .in_scope(|| pcs.commit(domains_and_traces));
+
+        /* println!("COMMIT: {:?}", commit.len());
+        println!("DATA: {:?}", data.len()); */
 
         // Get the chip ordering.
         let chip_ordering = named_preprocessed_traces
@@ -209,11 +237,15 @@ impl<SC: StarkGenericConfig, A: MachineAir<Val<SC>>> StarkMachine<SC, A> {
             .map(|(i, (name, _))| (name.to_owned(), i))
             .collect::<HashMap<_, _>>();
 
+        println!("CHIP ORDERING: {:#?}", chip_ordering.len());
+
         // Get the preprocessed traces
         let traces = named_preprocessed_traces
             .into_iter()
             .map(|(_, trace)| trace)
             .collect::<Vec<_>>();
+
+        println!("TRACES: {:#?}", traces.len());
 
         let pc_start = program.pc_start();
 
