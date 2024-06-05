@@ -22,9 +22,13 @@ pub mod utils {
 use std::{env, fmt::Debug, fs::File, path::Path};
 
 use anyhow::{Ok, Result};
+use provers::DistributedProver;
 pub use provers::{LocalProver, MockProver, NetworkProver, Prover};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sp1_core::stark::{MachineVerificationError, ShardProof};
+use sp1_core::{
+    stark::{self, MachineVerificationError, ShardProof},
+    utils::BabyBearPoseidon2,
+};
 pub use sp1_prover::{
     CoreSC, Groth16Proof, HashableKey, InnerSC, PlonkBn254Proof, SP1CoreProof, SP1Prover,
     SP1ProvingKey, SP1PublicValues, SP1Stdin, SP1VerifyingKey,
@@ -91,6 +95,9 @@ impl ProverClient {
             "network" => Self {
                 prover: Box::new(NetworkProver::new()),
             },
+            "distributed" => Self {
+                prover: Box::new(DistributedProver::new()),
+            },
             _ => panic!(
                 "invalid value for SP1_PROVER enviroment variable: expected 'local', 'mock', or 'remote'"
             ),
@@ -150,6 +157,12 @@ impl ProverClient {
         }
     }
 
+    pub fn distributed() -> Self {
+        Self {
+            prover: Box::new(DistributedProver::new()),
+        }
+    }
+
     /// Executes the given program on the given input (without generating a proof).
     ///
     /// Returns the public values of the program after it has been executed.
@@ -174,6 +187,10 @@ impl ProverClient {
     /// ```
     pub fn execute(&self, elf: &[u8], stdin: SP1Stdin) -> Result<SP1PublicValues> {
         Ok(SP1Prover::execute(elf, &stdin))
+    }
+
+    pub fn nb_checkpoints(&self, elf: &[u8], stdin: SP1Stdin) -> Result<(usize, SP1PublicValues)> {
+        Ok(SP1Prover::nb_checkpoints(elf, &stdin))
     }
 
     /// Setup a program to be proven and verified by the SP1 RISC-V zkVM by computing the proving
@@ -224,6 +241,15 @@ impl ProverClient {
     /// ```
     pub fn prove(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1Proof> {
         self.prover.prove(pk, stdin)
+    }
+
+    pub fn prove_partial(
+        &self,
+        pk: &SP1ProvingKey,
+        stdin: SP1Stdin,
+        checkpoint_nb: usize,
+    ) -> Result<(Vec<ShardProof<CoreSC>>, SP1PublicValues)> {
+        self.prover.prove_partial(pk, stdin, checkpoint_nb)
     }
 
     /// Proves the execution of the given program with the given input in the compressed mode.

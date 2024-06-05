@@ -11,7 +11,9 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
-use sp1_prover::{SP1Prover, SP1Stdin};
+use sp1_core::stark::ShardProof;
+use sp1_core::utils::BabyBearPoseidon2;
+use sp1_prover::{SP1Prover, SP1PublicValues, SP1Stdin};
 use tokio::{runtime, time::sleep};
 
 use super::LocalProver;
@@ -155,6 +157,15 @@ impl Prover for NetworkProver {
     fn prove(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1Proof> {
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async { self.prove_async(&pk.elf, stdin, ProofMode::Core).await })
+    }
+
+    fn prove_partial(
+        &self,
+        _pk: &SP1ProvingKey,
+        _stdin: SP1Stdin,
+        _checkpoint_nb: usize,
+    ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)> {
+        unimplemented!()
     }
 
     fn prove_compressed(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1CompressedProof> {

@@ -1,16 +1,21 @@
+mod distributed;
 mod local;
 mod mock;
 mod network;
 
 use crate::{SP1CompressedProof, SP1Groth16Proof, SP1PlonkProof, SP1Proof};
 use anyhow::Result;
+pub use distributed::DistributedProver;
 pub use local::LocalProver;
 pub use mock::MockProver;
 pub use network::NetworkProver;
 use sp1_core::stark::MachineVerificationError;
+use sp1_core::stark::ShardProof;
+use sp1_core::utils::BabyBearPoseidon2;
 use sp1_prover::CoreSC;
 use sp1_prover::SP1CoreProofData;
 use sp1_prover::SP1Prover;
+use sp1_prover::SP1PublicValues;
 use sp1_prover::SP1ReduceProof;
 use sp1_prover::{SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
 
@@ -24,6 +29,13 @@ pub trait Prover: Send + Sync {
 
     /// Prove the execution of a RISCV ELF with the given inputs.
     fn prove(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1Proof>;
+
+    fn prove_partial(
+        &self,
+        pk: &SP1ProvingKey,
+        stdin: SP1Stdin,
+        checkpoint_nb: usize,
+    ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)>;
 
     /// Generate a compressed proof of the execution of a RISCV ELF with the given inputs.
     fn prove_compressed(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1CompressedProof>;

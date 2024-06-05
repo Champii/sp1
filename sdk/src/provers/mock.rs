@@ -4,7 +4,8 @@ use crate::{
     SP1ProofVerificationError, SP1ProofWithPublicValues, SP1ProvingKey, SP1VerifyingKey,
 };
 use anyhow::Result;
-use sp1_prover::{SP1Prover, SP1Stdin};
+use sp1_core::{stark::ShardProof, utils::BabyBearPoseidon2};
+use sp1_prover::{SP1Prover, SP1PublicValues, SP1Stdin};
 
 /// An implementation of [crate::ProverClient] that can generate mock proofs.
 pub struct MockProver {
@@ -39,6 +40,15 @@ impl Prover for MockProver {
             stdin,
             public_values,
         })
+    }
+
+    fn prove_partial(
+        &self,
+        _pk: &SP1ProvingKey,
+        _stdin: SP1Stdin,
+        _checkpoint_nb: usize,
+    ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)> {
+        unimplemented!()
     }
 
     fn prove_compressed(

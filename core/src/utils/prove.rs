@@ -340,15 +340,15 @@ where
 
     let mut shard_proofs = Vec::<ShardProof<SC>>::new();
 
-    for i in 0..checkpoints {
-        println!("CHECKPOINT {}/{}", i + 1, checkpoints);
-        let shard_data_serialized =
-            run_and_prove_partial(program.clone(), stdin, config.clone(), i);
-        let shard_data: Vec<ShardProof<SC>> = bincode::deserialize(&shard_data_serialized).unwrap();
-        shard_proofs.extend(shard_data);
-        println!("CHECKPOINT DONE");
-    }
-
+    /* for i in 0..checkpoints {
+           println!("CHECKPOINT {}/{}", i + 1, checkpoints);
+           let shard_data_serialized =
+               run_and_prove_partial(program.clone(), stdin, config.clone(), i);
+           let shard_data: Vec<ShardProof<SC>> = bincode::deserialize(&shard_data_serialized).unwrap();
+           shard_proofs.extend(shard_data);
+           println!("CHECKPOINT DONE");
+       }
+    */
     let proof = crate::stark::MachineProof::<SC> { shard_proofs };
 
     (proof, public_values_stream)
@@ -359,7 +359,7 @@ pub fn run_and_prove_partial<SC: StarkGenericConfig + Send + Sync>(
     stdin: &SP1Stdin,
     config: SC,
     checkpoint_num: usize,
-) -> Vec<u8>
+) -> (Vec<u8>, Vec<u8>)
 where
     SC::Challenger: Clone,
     OpeningProof<SC>: Send + Sync,
@@ -502,7 +502,7 @@ where
     );
 
     // (serialized_proof, public_values_stream)
-    serialized_proof
+    (serialized_proof, public_values_stream)
 }
 
 use serde::Deserialize;

@@ -8,19 +8,19 @@ use crate::{
 };
 
 /// An implementation of [crate::ProverClient] that can generate end-to-end proofs locally.
-pub struct LocalProver {
+pub struct DistributedProver {
     prover: SP1Prover,
 }
 
-impl LocalProver {
-    /// Creates a new [LocalProver].
+impl DistributedProver {
+    /// Creates a new [DistributedProver].
     pub fn new() -> Self {
         let prover = SP1Prover::new();
         Self { prover }
     }
 }
 
-impl Prover for LocalProver {
+impl Prover for DistributedProver {
     fn id(&self) -> String {
         "local".to_string()
     }
@@ -44,11 +44,12 @@ impl Prover for LocalProver {
 
     fn prove_partial(
         &self,
-        _pk: &SP1ProvingKey,
-        _stdin: SP1Stdin,
-        _checkpoint_nb: usize,
+        pk: &SP1ProvingKey,
+        stdin: SP1Stdin,
+        checkpoint_nb: usize,
     ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)> {
-        unimplemented!()
+        let proof = self.prover.prove_core_partial(pk, &stdin, checkpoint_nb);
+        Ok(proof)
     }
 
     fn prove_compressed(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1CompressedProof> {
@@ -98,7 +99,7 @@ impl Prover for LocalProver {
     }
 }
 
-impl Default for LocalProver {
+impl Default for DistributedProver {
     fn default() -> Self {
         Self::new()
     }

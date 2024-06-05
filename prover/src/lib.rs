@@ -28,10 +28,10 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use sp1_core::air::PublicValues;
 pub use sp1_core::io::{SP1PublicValues, SP1Stdin};
-use sp1_core::runtime::Runtime;
-use sp1_core::stark::MachineVerificationError;
+use sp1_core::runtime::{Runtime, ShardingConfig};
 use sp1_core::stark::{Challenge, StarkProvingKey};
-use sp1_core::utils::{run_and_prove2, tmp_entry_point, DIGEST_SIZE};
+use sp1_core::stark::{MachineRecord, MachineVerificationError};
+use sp1_core::utils::{run_and_prove2, run_and_prove_partial, tmp_entry_point, DIGEST_SIZE};
 use sp1_core::{
     runtime::Program,
     stark::{
@@ -228,6 +228,27 @@ impl SP1Prover {
         SP1PublicValues::from(&runtime.state.public_values_stream)
     }
 
+    pub fn nb_checkpoints(elf: &[u8], stdin: &SP1Stdin) -> (usize, SP1PublicValues) {
+        let program = Program::from(elf);
+        let mut runtime = Runtime::new(program);
+        runtime.write_vecs(&stdin.buffer);
+        for (proof, vkey) in stdin.proofs.iter() {
+            runtime.write_proof(proof.clone(), vkey.clone());
+        }
+        runtime.run();
+        let shard_batch_size = env::var("SHARD_BATCH_SIZE")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
+        let nb_checkpoints =
+            runtime.record.cpu_events.last().unwrap().shard as f64 / shard_batch_size as f64;
+        (
+            nb_checkpoints.ceil() as usize,
+            SP1PublicValues::from(&runtime.state.public_values_stream),
+        )
+    }
+
     /// Generate shard proofs which split up and prove the valid execution of a RISC-V program with
     /// the core prover.
     #[instrument(name = "prove_core", level = "info", skip_all)]
@@ -241,6 +262,23 @@ impl SP1Prover {
             stdin: stdin.clone(),
             public_values,
         }
+    }
+
+    #[instrument(name = "prove_core_partial", level = "info", skip_all)]
+    pub fn prove_core_partial(
+        &self,
+        pk: &SP1ProvingKey,
+        stdin: &SP1Stdin,
+        checkoint_nb: usize,
+    ) -> (Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues) {
+        let config = CoreSC::default();
+        let program = Program::from(&pk.elf);
+        let (serialized_proof, public_values_stream) =
+            run_and_prove_partial(program, stdin, config, checkoint_nb);
+        let proof: Vec<ShardProof<BabyBearPoseidon2>> =
+            bincode::deserialize(&serialized_proof).unwrap();
+        let public_values = SP1PublicValues::from(&public_values_stream);
+        (proof, public_values)
     }
 
     /// Reduce shards proofs to a single shard proof using the recursion prover.
