@@ -28,10 +28,10 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use sp1_core::air::PublicValues;
 pub use sp1_core::io::{SP1PublicValues, SP1Stdin};
-use sp1_core::runtime::{Runtime, ShardingConfig};
+use sp1_core::runtime::Runtime;
+use sp1_core::stark::MachineVerificationError;
 use sp1_core::stark::{Challenge, StarkProvingKey};
-use sp1_core::stark::{MachineRecord, MachineVerificationError};
-use sp1_core::utils::{run_and_prove2, run_and_prove_partial, tmp_entry_point, DIGEST_SIZE};
+use sp1_core::utils::{run_and_prove_partial, DIGEST_SIZE};
 use sp1_core::{
     runtime::Program,
     stark::{
@@ -255,7 +255,7 @@ impl SP1Prover {
     pub fn prove_core(&self, pk: &SP1ProvingKey, stdin: &SP1Stdin) -> SP1CoreProof {
         let config = CoreSC::default();
         let program = Program::from(&pk.elf);
-        let (proof, public_values_stream) = tmp_entry_point(program, stdin, config);
+        let (proof, public_values_stream) = run_and_prove(program, stdin, config);
         let public_values = SP1PublicValues::from(&public_values_stream);
         SP1CoreProof {
             proof: SP1CoreProofData(proof.shard_proofs),
@@ -270,15 +270,13 @@ impl SP1Prover {
         pk: &SP1ProvingKey,
         stdin: &SP1Stdin,
         checkoint_nb: usize,
-    ) -> (Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues) {
+    ) -> Vec<ShardProof<BabyBearPoseidon2>> {
         let config = CoreSC::default();
         let program = Program::from(&pk.elf);
-        let (serialized_proof, public_values_stream) =
-            run_and_prove_partial(program, stdin, config, checkoint_nb);
+        let serialized_proof = run_and_prove_partial(program, stdin, config, checkoint_nb);
         let proof: Vec<ShardProof<BabyBearPoseidon2>> =
             bincode::deserialize(&serialized_proof).unwrap();
-        let public_values = SP1PublicValues::from(&public_values_stream);
-        (proof, public_values)
+        proof
     }
 
     /// Reduce shards proofs to a single shard proof using the recursion prover.

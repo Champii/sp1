@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use sp1_core::{stark::ShardProof, utils::BabyBearPoseidon2};
-use sp1_prover::{SP1Prover, SP1PublicValues, SP1Stdin};
+use sp1_prover::{SP1Prover, SP1Stdin};
 
 /// An implementation of [crate::ProverClient] that can generate mock proofs.
 pub struct MockProver {
@@ -47,7 +47,7 @@ impl Prover for MockProver {
         _pk: &SP1ProvingKey,
         _stdin: SP1Stdin,
         _checkpoint_nb: usize,
-    ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)> {
+    ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>> {
         unimplemented!()
     }
 

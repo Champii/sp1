@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use sp1_core::stark::ShardProof;
 use sp1_core::utils::BabyBearPoseidon2;
-use sp1_prover::{SP1Prover, SP1PublicValues, SP1Stdin};
+use sp1_prover::{SP1Prover, SP1Stdin};
 use tokio::{runtime, time::sleep};
 
 use super::LocalProver;
@@ -164,7 +164,7 @@ impl Prover for NetworkProver {
         _pk: &SP1ProvingKey,
         _stdin: SP1Stdin,
         _checkpoint_nb: usize,
-    ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)> {
+    ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>> {
         unimplemented!()
     }
 

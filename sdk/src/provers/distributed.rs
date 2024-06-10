@@ -1,6 +1,6 @@
 use anyhow::Result;
 use sp1_core::{stark::ShardProof, utils::BabyBearPoseidon2};
-use sp1_prover::{SP1Prover, SP1PublicValues, SP1Stdin};
+use sp1_prover::{SP1Prover, SP1Stdin};
 
 use crate::{
     Prover, SP1CompressedProof, SP1Groth16Proof, SP1PlonkProof, SP1Proof, SP1ProofWithPublicValues,
@@ -47,7 +47,7 @@ impl Prover for DistributedProver {
         pk: &SP1ProvingKey,
         stdin: SP1Stdin,
         checkpoint_nb: usize,
-    ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)> {
+    ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>> {
         let proof = self.prover.prove_core_partial(pk, &stdin, checkpoint_nb);
         Ok(proof)
     }

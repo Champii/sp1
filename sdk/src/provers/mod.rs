@@ -15,7 +15,6 @@ use sp1_core::utils::BabyBearPoseidon2;
 use sp1_prover::CoreSC;
 use sp1_prover::SP1CoreProofData;
 use sp1_prover::SP1Prover;
-use sp1_prover::SP1PublicValues;
 use sp1_prover::SP1ReduceProof;
 use sp1_prover::{SP1ProvingKey, SP1Stdin, SP1VerifyingKey};
 
@@ -35,7 +34,7 @@ pub trait Prover: Send + Sync {
         pk: &SP1ProvingKey,
         stdin: SP1Stdin,
         checkpoint_nb: usize,
-    ) -> Result<(Vec<ShardProof<BabyBearPoseidon2>>, SP1PublicValues)>;
+    ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>>;
 
     /// Generate a compressed proof of the execution of a RISCV ELF with the given inputs.
     fn prove_compressed(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1CompressedProof>;

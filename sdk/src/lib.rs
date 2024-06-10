@@ -25,10 +25,7 @@ use anyhow::{Ok, Result};
 use provers::DistributedProver;
 pub use provers::{LocalProver, MockProver, NetworkProver, Prover};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sp1_core::{
-    stark::{self, MachineVerificationError, ShardProof},
-    utils::BabyBearPoseidon2,
-};
+use sp1_core::stark::{MachineVerificationError, ShardProof};
 pub use sp1_prover::{
     CoreSC, Groth16Proof, HashableKey, InnerSC, PlonkBn254Proof, SP1CoreProof, SP1Prover,
     SP1ProvingKey, SP1PublicValues, SP1Stdin, SP1VerifyingKey,
@@ -248,7 +245,7 @@ impl ProverClient {
         pk: &SP1ProvingKey,
         stdin: SP1Stdin,
         checkpoint_nb: usize,
-    ) -> Result<(Vec<ShardProof<CoreSC>>, SP1PublicValues)> {
+    ) -> Result<Vec<ShardProof<CoreSC>>> {
         self.prover.prove_partial(pk, stdin, checkpoint_nb)
     }
 
