@@ -311,7 +311,7 @@ where
     let mut shard_main_datas = Vec::new();
     let mut challenger = machine.config().challenger();
     vk.observe_into(&mut challenger);
-    for checkpoint_file in checkpoints.iter_mut() {
+    if let Some(checkpoint_file) = checkpoints.iter_mut().nth(checkpoint_id) {
         let mut record = trace_checkpoint(program.clone(), checkpoint_file, opts);
         record.public_values = public_values;
         reset_seek(&mut *checkpoint_file);
