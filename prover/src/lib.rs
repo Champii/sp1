@@ -240,11 +240,11 @@ impl SP1Prover {
         opts.shard_size = std::env::var("SHARD_SIZE")
             .unwrap()
             .parse::<usize>()
-            .unwrap();
+            .unwrap_or(opts.shard_size);
         opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
             .unwrap()
             .parse::<usize>()
-            .unwrap();
+            .unwrap_or(opts.shard_size);
 
         let mut runtime = Runtime::new(program, opts);
         runtime.write_vecs(&stdin.buffer);
