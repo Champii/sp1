@@ -210,7 +210,7 @@ mod test {
         lookup::InteractionKind,
         runtime::{Program, Runtime, ShardingConfig},
         stark::RiscvAir,
-        utils::{setup_logger, tests::UINT256_MUL_ELF, BabyBearPoseidon2},
+        utils::{setup_logger, tests::UINT256_MUL_ELF, BabyBearPoseidon2, SP1CoreOpts},
     };
 
     use super::debug_interactions_with_all_chips;
@@ -222,8 +222,8 @@ mod test {
         let config = BabyBearPoseidon2::new();
         let machine = RiscvAir::machine(config);
         let (pk, _) = machine.setup(&program);
-        let mut runtime = Runtime::new(program);
-        runtime.run();
+        let mut runtime = Runtime::new(program, SP1CoreOpts::default());
+        runtime.run().unwrap();
         let shards = machine.shard(runtime.record, &ShardingConfig::default());
         let ok =
             debug_interactions_with_all_chips(&machine, &pk, &shards, InteractionKind::all_kinds());

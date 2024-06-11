@@ -1,11 +1,14 @@
 use anyhow::Result;
+use cfg_if::cfg_if;
 use sp1_core::{stark::ShardProof, utils::BabyBearPoseidon2};
 use sp1_prover::{SP1Prover, SP1Stdin};
 
 use crate::{
-    Prover, SP1CompressedProof, SP1Groth16Proof, SP1PlonkProof, SP1Proof, SP1ProofWithPublicValues,
+    Prover, SP1CompressedProof, SP1PlonkBn254Proof, SP1Proof, SP1ProofWithPublicValues,
     SP1ProvingKey, SP1VerifyingKey,
 };
+
+use super::ProverType;
 
 /// An implementation of [crate::ProverClient] that can generate end-to-end proofs locally.
 pub struct DistributedProver {
@@ -21,8 +24,8 @@ impl DistributedProver {
 }
 
 impl Prover for DistributedProver {
-    fn id(&self) -> String {
-        "local".to_string()
+    fn id(&self) -> ProverType {
+        ProverType::Distributed
     }
 
     fn setup(&self, elf: &[u8]) -> (SP1ProvingKey, SP1VerifyingKey) {
@@ -34,7 +37,7 @@ impl Prover for DistributedProver {
     }
 
     fn prove(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1Proof> {
-        let proof = self.prover.prove_core(pk, &stdin);
+        let proof = self.prover.prove_core(pk, &stdin)?;
         Ok(SP1ProofWithPublicValues {
             proof: proof.proof.0,
             stdin: proof.stdin,
@@ -48,15 +51,15 @@ impl Prover for DistributedProver {
         stdin: SP1Stdin,
         checkpoint_nb: usize,
     ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>> {
-        let proof = self.prover.prove_core_partial(pk, &stdin, checkpoint_nb);
+        let proof = self.prover.prove_core_partial(pk, &stdin, checkpoint_nb)?;
         Ok(proof)
     }
 
     fn prove_compressed(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1CompressedProof> {
-        let proof = self.prover.prove_core(pk, &stdin);
+        let proof = self.prover.prove_core(pk, &stdin)?;
         let deferred_proofs = stdin.proofs.iter().map(|p| p.0.clone()).collect();
         let public_values = proof.public_values.clone();
-        let reduce_proof = self.prover.compress(&pk.vk, proof, deferred_proofs);
+        let reduce_proof = self.prover.compress(&pk.vk, proof, deferred_proofs)?;
         Ok(SP1CompressedProof {
             proof: reduce_proof.proof,
             stdin,
@@ -64,38 +67,36 @@ impl Prover for DistributedProver {
         })
     }
 
-    fn prove_groth16(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1Groth16Proof> {
-        sp1_prover::build::get_groth16_artifacts_dir();
+    #[allow(unused)]
+    fn prove_plonk(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1PlonkBn254Proof> {
+        cfg_if! {
+            if #[cfg(feature = "plonk")] {
 
-        let proof = self.prover.prove_core(pk, &stdin);
-        let deferred_proofs = stdin.proofs.iter().map(|p| p.0.clone()).collect();
-        let public_values = proof.public_values.clone();
-        let reduce_proof = self.prover.compress(&pk.vk, proof, deferred_proofs);
-        let compress_proof = self.prover.shrink(reduce_proof);
-        let outer_proof = self.prover.wrap_bn254(compress_proof);
-        let artifacts_dir = sp1_prover::build::get_groth16_artifacts_dir();
-        let proof = self.prover.wrap_groth16(outer_proof, artifacts_dir);
-        Ok(SP1ProofWithPublicValues {
-            proof,
-            stdin,
-            public_values,
-        })
-    }
+                let proof = self.prover.prove_core(pk, &stdin)?;
+                let deferred_proofs = stdin.proofs.iter().map(|p| p.0.clone()).collect();
+                let public_values = proof.public_values.clone();
+                let reduce_proof = self.prover.compress(&pk.vk, proof, deferred_proofs)?;
+                let compress_proof = self.prover.shrink(reduce_proof)?;
+                let outer_proof = self.prover.wrap_bn254(compress_proof)?;
 
-    fn prove_plonk(&self, _pk: &SP1ProvingKey, _stdin: SP1Stdin) -> Result<SP1PlonkProof> {
-        // let proof = self.prover.prove_core(pk, &stdin);
-        // let deferred_proofs = stdin.proofs.iter().map(|p| p.0.clone()).collect();
-        // let public_values = proof.public_values.clone();
-        // let reduce_proof = self.prover.compress(&pk.vk, proof, deferred_proofs);
-        // let compress_proof = self.prover.shrink(&pk.vk, reduce_proof);
-        // let outer_proof = self.prover.wrap_bn254(&pk.vk, compress_proof);
-        // let proof = self.prover.wrap_plonk(outer_proof, artifacts_dir);
-        // Ok(SP1ProofWithPublicValues {
-        //     proof,
-        //     stdin,
-        //     public_values,
-        // })
-        todo!()
+                let plonk_bn254_aritfacts = if sp1_prover::build::sp1_dev_mode() {
+                    sp1_prover::build::try_build_plonk_bn254_artifacts_dev(
+                        &self.prover.wrap_vk,
+                        &outer_proof.proof,
+                    )
+                } else {
+                    sp1_prover::build::try_install_plonk_bn254_artifacts()
+                };
+                let proof = self.prover.wrap_plonk_bn254(outer_proof, &plonk_bn254_aritfacts);
+                Ok(SP1ProofWithPublicValues {
+                    proof,
+                    stdin,
+                    public_values,
+                })
+            } else {
+                panic!("plonk feature not enabled")
+            }
+        }
     }
 }
 

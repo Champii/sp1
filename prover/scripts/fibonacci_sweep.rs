@@ -1,8 +1,5 @@
 //! Sweeps end-to-end prover performance across a wide range of parameters for Fibonacci.
 
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-
 use std::{fs::File, io::BufWriter, io::Write, time::Instant};
 
 use itertools::iproduct;
@@ -65,7 +62,7 @@ fn main() {
             proofs: vec![],
         };
         let leaf_proving_start = Instant::now();
-        let proof = prover.prove_core(&pk, &stdin);
+        let proof = prover.prove_core(&pk, &stdin).unwrap();
         let leaf_proving_duration = leaf_proving_start.elapsed().as_secs_f64();
 
         let recursion_proving_start = Instant::now();

@@ -2,6 +2,8 @@ use crate::{
     stark::{ShardProof, StarkVerifyingKey},
     utils::{BabyBearPoseidon2, Buffer},
 };
+use k256::sha2::{Digest, Sha256};
+use num_bigint::BigUint;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Standard input for the prover.
@@ -25,7 +27,7 @@ pub struct SP1PublicValues {
 
 impl SP1Stdin {
     /// Create a new `SP1Stdin`.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             buffer: Vec::new(),
             ptr: 0,
@@ -83,7 +85,7 @@ impl SP1Stdin {
 
 impl SP1PublicValues {
     /// Create a new `SP1PublicValues`.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             buffer: Buffer::new(),
         }
@@ -126,6 +128,26 @@ impl SP1PublicValues {
     /// Write a slice of bytes to the buffer.
     pub fn write_slice(&mut self, slice: &[u8]) {
         self.buffer.write_slice(slice);
+    }
+
+    /// Hash the public values, mask the top 3 bits and return a BigUint. Matches the implementation
+    /// of `hashPublicValues` in the Solidity verifier.
+    ///
+    /// ```solidity
+    /// sha256(publicValues) & bytes32(uint256((1 << 253) - 1));
+    /// ```
+    pub fn hash(&self) -> BigUint {
+        // Hash the public values.
+        let mut hasher = Sha256::new();
+        hasher.update(self.buffer.data.as_slice());
+        let hash_result = hasher.finalize();
+        let mut hash = hash_result.to_vec();
+
+        // Mask the top 3 bits.
+        hash[0] &= 0b00011111;
+
+        // Return the masked hash as a BigUint.
+        BigUint::from_bytes_be(&hash)
     }
 }
 
@@ -170,5 +192,25 @@ pub mod proof_serde {
         } else {
             MachineProof::<SC>::deserialize(deserializer)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_public_values() {
+        let test_hex = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+        let test_bytes = hex::decode(test_hex).unwrap();
+
+        let mut public_values = SP1PublicValues::new();
+        public_values.write_slice(&test_bytes);
+        let hash = public_values.hash();
+
+        let expected_hash = "1ce987d0a7fcc2636fe87e69295ba12b1cc46c256b369ae7401c51b805ee91bd";
+        let expected_hash_biguint = BigUint::from_bytes_be(&hex::decode(expected_hash).unwrap());
+
+        assert_eq!(hash, expected_hash_biguint);
     }
 }

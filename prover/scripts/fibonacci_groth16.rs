@@ -1,7 +1,4 @@
-//! Tests end-to-end performance of wrapping a recursion proof to Groth16.
-
-#![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
+//! Tests end-to-end performance of wrapping a recursion proof to PLONK.
 
 use std::time::Instant;
 
@@ -62,7 +59,7 @@ fn main() {
             proofs: vec![],
         };
         let leaf_proving_start = Instant::now();
-        let proof = prover.prove_core(&pk, &stdin);
+        let proof = prover.prove_core(&pk, &stdin).unwrap();
         let leaf_proving_duration = leaf_proving_start.elapsed().as_secs_f64();
         tracing::info!("leaf_proving_duration={}", leaf_proving_duration);
 

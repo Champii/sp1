@@ -30,7 +30,7 @@ pub struct ShardMainData<SC: StarkGenericConfig> {
 }
 
 impl<SC: StarkGenericConfig> ShardMainData<SC> {
-    pub fn new(
+    pub const fn new(
         traces: Vec<RowMajorMatrix<Val<SC>>>,
         main_commit: Com<SC>,
         main_data: PcsProverData<SC>,
@@ -64,7 +64,7 @@ impl<SC: StarkGenericConfig> ShardMainData<SC> {
         Ok(ShardMainDataWrapper::TempFile(file, bytes_written))
     }
 
-    pub fn to_in_memory(self) -> ShardMainDataWrapper<SC> {
+    pub const fn to_in_memory(self) -> ShardMainDataWrapper<SC> {
         ShardMainDataWrapper::InMemory(self)
     }
 }
@@ -124,7 +124,7 @@ pub struct ShardOpenedValues<T: Serialize> {
 /// The maximum number of elements that can be stored in the public values vec.  Both SP1 and recursive
 /// proofs need to pad their public_values vec to this length.  This is required since the recursion
 /// verification program expects the public values vec to be fixed length.
-pub const PROOF_MAX_NUM_PVS: usize = 232;
+pub const PROOF_MAX_NUM_PVS: usize = 240;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "")]

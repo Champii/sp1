@@ -15,13 +15,15 @@ use sp1_core::{
 };
 use sp1_primitives::poseidon2_hash;
 use sp1_recursion_core::{air::RecursionPublicValues, stark::config::BabyBearPoseidon2Outer};
-use sp1_recursion_gnark_ffi::{plonk_bn254::PlonkBn254Proof, Groth16Proof};
+use sp1_recursion_gnark_ffi::plonk_bn254::PlonkBn254Proof;
+use thiserror::Error;
 
 use crate::utils::words_to_bytes_be;
 use crate::{utils::babybear_bytes_to_bn254, words_to_bytes};
 use crate::{utils::babybears_to_bn254, CoreSC, InnerSC};
 
 /// The information necessary to generate a proof for a given RISC-V program.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SP1ProvingKey {
     pub pk: StarkProvingKey<CoreSC>,
     pub elf: Vec<u8>,
@@ -30,7 +32,7 @@ pub struct SP1ProvingKey {
 }
 
 /// The information necessary to verify a proof for a given RISC-V program.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SP1VerifyingKey {
     pub vk: StarkVerifyingKey<CoreSC>,
 }
@@ -141,10 +143,10 @@ pub type SP1CoreProof = SP1ProofWithMetadata<SP1CoreProofData>;
 /// within SP1 programs.
 pub type SP1ReducedProof = SP1ProofWithMetadata<SP1ReducedProofData>;
 
-/// An SP1 proof that has been wrapped into a single Groth16 proof and can be verified onchain.
-pub type SP1Groth16Proof = SP1ProofWithMetadata<SP1Groth16ProofData>;
+/// An SP1 proof that has been wrapped into a single PLONK proof and can be verified onchain.
+pub type SP1PlonkBn254Proof = SP1ProofWithMetadata<SP1PlonkBn254ProofData>;
 
-/// An SP1 proof that has been wrapped into a single Plonk proof and can be verified onchain.
+/// An SP1 proof that has been wrapped into a single PLONK proof and can be verified onchain.
 pub type SP1PlonkProof = SP1ProofWithMetadata<SP1PlonkProofData>;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -153,13 +155,13 @@ pub struct SP1CoreProofData(pub Vec<ShardProof<CoreSC>>);
 pub struct SP1ReducedProofData(pub ShardProof<InnerSC>);
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct SP1Groth16ProofData(pub Groth16Proof);
+pub struct SP1PlonkBn254ProofData(pub PlonkBn254Proof);
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SP1PlonkProofData(pub PlonkBn254Proof);
 
 /// An intermediate proof which proves the execution over a range of shards.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(bound(serialize = "ShardProof<SC>: Serialize"))]
 #[serde(bound(deserialize = "ShardProof<SC>: Deserialize<'de>"))]
 pub struct SP1ReduceProof<SC: StarkGenericConfig> {
@@ -189,8 +191,11 @@ impl SP1ReduceProof<BabyBearPoseidon2Outer> {
 }
 
 /// A proof that can be reduced along with other proofs into one proof.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum SP1ReduceProofWrapper {
     Core(SP1ReduceProof<CoreSC>),
     Recursive(SP1ReduceProof<InnerSC>),
 }
+
+#[derive(Error, Debug)]
+pub enum SP1RecursionProverError {}

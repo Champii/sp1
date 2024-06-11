@@ -4,44 +4,33 @@ use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 
-/// The base URL for the S3 bucket containing the groth16 artifacts.
-pub const GROTH16_ARTIFACTS_URL_BASE: &str = "https://sp1-circuits.s3-us-east-2.amazonaws.com";
+use crate::utils::block_on;
 
-/// The current version of the groth16 artifacts.
-pub const GROTH16_ARTIFACTS_COMMIT: &str = "1eee43b6";
+/// The base URL for the S3 bucket containing the plonk bn254 artifacts.
+pub const PLONK_BN254_ARTIFACTS_URL_BASE: &str = "https://sp1-circuits.s3-us-east-2.amazonaws.com";
 
-/// Install the latest groth16 artifacts.
+/// The current version of the plonk bn254 artifacts.
+pub const PLONK_BN254_ARTIFACTS_COMMIT: &str = "e48c01ec";
+
+/// Install the latest plonk bn254 artifacts.
 ///
-/// This function will download the latest groth16 artifacts from the S3 bucket and extract them to
-/// the directory specified by [groth16_artifacts_dir()].
-pub fn install_groth16_artifacts(build_dir: PathBuf) {
-    // If build directory already exists, skip the download.
-    if build_dir.exists() {
-        println!("[sp1] groth16 artifacts already seem to exist at {}. if you want to re-download them, delete the directory", build_dir.display());
-        return;
-    } else {
-        println!(
-            "[sp1] groth16 artifacts for commit {} do not exist at {}. downloading...",
-            GROTH16_ARTIFACTS_COMMIT,
-            build_dir.display()
-        );
-    }
-
+/// This function will download the latest plonk bn254 artifacts from the S3 bucket and extract them to
+/// the directory specified by [plonk_bn254_artifacts_dir()].
+pub fn install_plonk_bn254_artifacts(build_dir: PathBuf) {
     // Create the build directory.
     std::fs::create_dir_all(&build_dir).expect("failed to create build directory");
 
     // Download the artifacts.
     let download_url = format!(
         "{}/{}.tar.gz",
-        GROTH16_ARTIFACTS_URL_BASE, GROTH16_ARTIFACTS_COMMIT
+        PLONK_BN254_ARTIFACTS_URL_BASE, PLONK_BN254_ARTIFACTS_COMMIT
     );
     let mut artifacts_tar_gz_file =
         tempfile::NamedTempFile::new().expect("failed to create tempfile");
-    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     let client = Client::builder()
         .build()
         .expect("failed to create reqwest client");
-    rt.block_on(download_file(
+    block_on(download_file(
         &client,
         &download_url,
         &mut artifacts_tar_gz_file,
@@ -67,14 +56,14 @@ pub fn install_groth16_artifacts(build_dir: PathBuf) {
     );
 }
 
-/// The directory where the groth16 artifacts will be stored based on [GROTH16_ARTIFACTS_VERSION]
-/// and [GROTH16_ARTIFACTS_URL_BASE].
-pub fn install_groth16_artifacts_dir() -> PathBuf {
+/// The directory where the plonk bn254 artifacts will be stored based on [PLONK_BN254_ARTIFACTS_VERSION]
+/// and [PLONK_BN254_ARTIFACTS_URL_BASE].
+pub fn install_plonk_bn254_artifacts_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap()
         .join(".sp1")
         .join("circuits")
-        .join(GROTH16_ARTIFACTS_COMMIT)
+        .join(PLONK_BN254_ARTIFACTS_COMMIT)
 }
 
 /// Download the file with a progress bar that indicates the progress.

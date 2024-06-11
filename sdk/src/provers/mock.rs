@@ -1,11 +1,16 @@
 #![allow(unused_variables)]
 use crate::{
-    Prover, SP1CompressedProof, SP1Groth16Proof, SP1PlonkProof, SP1Proof,
-    SP1ProofVerificationError, SP1ProofWithPublicValues, SP1ProvingKey, SP1VerifyingKey,
+    Prover, SP1CompressedProof, SP1PlonkBn254Proof, SP1Proof, SP1ProofVerificationError,
+    SP1ProofWithPublicValues, SP1ProvingKey, SP1VerifyingKey,
 };
 use anyhow::Result;
+use p3_field::PrimeField;
 use sp1_core::{stark::ShardProof, utils::BabyBearPoseidon2};
-use sp1_prover::{SP1Prover, SP1Stdin};
+use sp1_prover::{
+    verify::verify_plonk_bn254_public_inputs, HashableKey, PlonkBn254Proof, SP1Prover, SP1Stdin,
+};
+
+use super::ProverType;
 
 /// An implementation of [crate::ProverClient] that can generate mock proofs.
 pub struct MockProver {
@@ -21,8 +26,8 @@ impl MockProver {
 }
 
 impl Prover for MockProver {
-    fn id(&self) -> String {
-        "mock".to_string()
+    fn id(&self) -> ProverType {
+        ProverType::Mock
     }
 
     fn setup(&self, elf: &[u8]) -> (SP1ProvingKey, SP1VerifyingKey) {
@@ -34,7 +39,7 @@ impl Prover for MockProver {
     }
 
     fn prove(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1Proof> {
-        let public_values = SP1Prover::execute(&pk.elf, &stdin);
+        let (public_values, _) = SP1Prover::execute(&pk.elf, &stdin)?;
         Ok(SP1ProofWithPublicValues {
             proof: vec![],
             stdin,
@@ -59,12 +64,20 @@ impl Prover for MockProver {
         unimplemented!()
     }
 
-    fn prove_groth16(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1Groth16Proof> {
-        todo!()
-    }
-
-    fn prove_plonk(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1PlonkProof> {
-        todo!()
+    fn prove_plonk(&self, pk: &SP1ProvingKey, stdin: SP1Stdin) -> Result<SP1PlonkBn254Proof> {
+        let (public_values, _) = SP1Prover::execute(&pk.elf, &stdin)?;
+        Ok(SP1PlonkBn254Proof {
+            proof: PlonkBn254Proof {
+                public_inputs: [
+                    pk.vk.hash_bn254().as_canonical_biguint().to_string(),
+                    public_values.hash().to_string(),
+                ],
+                encoded_proof: "".to_string(),
+                raw_proof: "".to_string(),
+            },
+            stdin,
+            public_values,
+        })
     }
 
     fn verify(
@@ -83,11 +96,8 @@ impl Prover for MockProver {
         Ok(())
     }
 
-    fn verify_groth16(&self, _proof: &SP1Groth16Proof, _vkey: &SP1VerifyingKey) -> Result<()> {
-        Ok(())
-    }
-
-    fn verify_plonk(&self, _proof: &SP1PlonkProof, _vkey: &SP1VerifyingKey) -> Result<()> {
+    fn verify_plonk(&self, proof: &SP1PlonkBn254Proof, vkey: &SP1VerifyingKey) -> Result<()> {
+        verify_plonk_bn254_public_inputs(vkey, &proof.public_values, &proof.proof.public_inputs)?;
         Ok(())
     }
 }

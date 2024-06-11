@@ -3,6 +3,7 @@ use std::{
     io::Read,
 };
 
+use futures::Future;
 use p3_baby_bear::BabyBear;
 use p3_bn254_fr::Bn254Fr;
 use p3_field::AbstractField;
@@ -11,11 +12,11 @@ use sp1_core::{
     air::Word,
     io::SP1Stdin,
     runtime::{Program, Runtime},
+    utils::SP1CoreOpts,
 };
+use tokio::{runtime, task::block_in_place};
 
 use crate::SP1CoreProofData;
-
-pub const RECONSTRUCT_COMMITMENTS_ENV_VAR: &str = "RECONSTRUCT_COMMITMENTS";
 
 impl SP1CoreProofData {
     pub fn save(&self, path: &str) -> Result<(), std::io::Error> {
@@ -28,9 +29,9 @@ impl SP1CoreProofData {
 /// Get the number of cycles for a given program.
 pub fn get_cycles(elf: &[u8], stdin: &SP1Stdin) -> u64 {
     let program = Program::from(elf);
-    let mut runtime = Runtime::new(program);
+    let mut runtime = Runtime::new(program, SP1CoreOpts::default());
     runtime.write_vecs(&stdin.buffer);
-    runtime.run();
+    runtime.dry_run();
     runtime.state.global_clk
 }
 
@@ -83,4 +84,17 @@ pub fn words_to_bytes_be(words: &[u32; 8]) -> [u8; 32] {
         bytes[i * 4..(i + 1) * 4].copy_from_slice(&word_bytes);
     }
     bytes
+}
+
+/// Utility method for blocking on an async function. If we're already in a tokio runtime, we'll
+/// block in place. Otherwise, we'll create a new runtime.
+pub fn block_on<T>(fut: impl Future<Output = T>) -> T {
+    // Handle case if we're already in an tokio runtime.
+    if let Ok(handle) = runtime::Handle::try_current() {
+        block_in_place(|| handle.block_on(fut))
+    } else {
+        // Otherwise create a new runtime.
+        let rt = runtime::Runtime::new().expect("Failed to create a new runtime");
+        rt.block_on(fut)
+    }
 }

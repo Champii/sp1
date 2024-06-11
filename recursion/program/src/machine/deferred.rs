@@ -27,6 +27,8 @@ use crate::types::ShardProofVariable;
 use crate::types::VerifyingKeyVariable;
 use crate::utils::{const_fri_config, get_challenger_public_values, hash_vkey, var2felt};
 
+use super::utils::{commit_public_values, verify_public_values_hash};
+
 #[derive(Debug, Clone, Copy)]
 pub struct SP1DeferredVerifier<C: Config, SC: StarkGenericConfig, A> {
     _phantom: PhantomData<(C, SC, A)>,
@@ -89,6 +91,8 @@ where
 
         SP1DeferredVerifier::verify(&mut builder, &pcs, machine, input);
 
+        builder.halt();
+
         builder.compile_program()
     }
 }
@@ -112,7 +116,7 @@ where
     /// - Asserts that each of these proofs is valid as a `compress` proof.
     /// - Asserts that each of these proofs is complete by checking the `is_complete` flag in the
     ///  proof's public values.
-    /// - Aggregates the proof information into an accumulated deferred digest.
+    /// - Aggregates the proof information into the accumulated deferred digest.
     pub fn verify(
         builder: &mut Builder<C>,
         pcs: &TwoAdicFriPcsVariable<C>,
@@ -201,6 +205,9 @@ where
             let current_public_values: &RecursionPublicValues<Felt<C::F>> =
                 current_public_values_elements.as_slice().borrow();
 
+            // Check that the public values digest is correct.
+            verify_public_values_hash(builder, current_public_values);
+
             // Assert that the proof is complete.
             builder.assert_felt_eq(current_public_values.is_complete, C::F::one());
 
@@ -283,11 +290,6 @@ where
         // Set the is_complete flag.
         deferred_public_values.is_complete = var2felt(builder, is_complete);
 
-        // Commit the public values.
-        for value in deferred_public_values_stream {
-            builder.commit_public_value(value);
-        }
-
-        builder.halt();
+        commit_public_values(builder, deferred_public_values);
     }
 }

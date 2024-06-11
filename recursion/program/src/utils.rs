@@ -81,7 +81,7 @@ pub fn clone_array<T: MemVariable<C>>(
     new_arr
 }
 
-// TODO: this can be done much more efficiently, but in the meantime this should work
+// OPT: this can be done much more efficiently, but in the meantime this should work
 pub fn felt2var<C: Config>(builder: &mut Builder<C>, felt: Felt<C::F>) -> Var<C::N> {
     let bits = builder.num2bits_f(felt);
     builder.bits2num_v(&bits)
@@ -144,26 +144,6 @@ pub fn assign_challenger_from_pv<C: Config>(
     builder.assign(dst.nb_outputs, num_outputs_var);
     for i in 0..PERMUTATION_WIDTH {
         builder.set(&mut dst.output_buffer, i, values.output_buffer[i]);
-    }
-}
-
-/// Commits a challenger variable to public values.
-pub fn commit_challenger<C: Config>(builder: &mut Builder<C>, var: &DuplexChallengerVariable<C>) {
-    for i in 0..PERMUTATION_WIDTH {
-        let element = builder.get(&var.sponge_state, i);
-        builder.commit_public_value(element);
-    }
-    let num_inputs_felt = var2felt(builder, var.nb_inputs);
-    builder.commit_public_value(num_inputs_felt);
-    for i in 0..PERMUTATION_WIDTH {
-        let element = builder.get(&var.input_buffer, i);
-        builder.commit_public_value(element);
-    }
-    let num_outputs_felt = var2felt(builder, var.nb_outputs);
-    builder.commit_public_value(num_outputs_felt);
-    for i in 0..PERMUTATION_WIDTH {
-        let element = builder.get(&var.output_buffer, i);
-        builder.commit_public_value(element);
     }
 }
 

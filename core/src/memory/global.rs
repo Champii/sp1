@@ -29,7 +29,7 @@ pub struct MemoryChip {
 
 impl MemoryChip {
     /// Creates a new memory chip with a certain type.
-    pub fn new(kind: MemoryChipType) -> Self {
+    pub const fn new(kind: MemoryChipType) -> Self {
         Self { kind }
     }
 }
@@ -177,15 +177,15 @@ mod tests {
     use crate::stark::MachineRecord;
     use crate::stark::{RiscvAir, StarkGenericConfig};
     use crate::syscall::precompiles::sha256::extend_tests::sha_extend_program;
-    use crate::utils::{setup_logger, BabyBearPoseidon2};
+    use crate::utils::{setup_logger, BabyBearPoseidon2, SP1CoreOpts};
     use crate::utils::{uni_stark_prove as prove, uni_stark_verify as verify};
     use p3_baby_bear::BabyBear;
 
     #[test]
     fn test_memory_generate_trace() {
         let program = simple_program();
-        let mut runtime = Runtime::new(program);
-        runtime.run();
+        let mut runtime = Runtime::new(program, SP1CoreOpts::default());
+        runtime.run().unwrap();
         let shard = runtime.record.clone();
 
         let chip: MemoryChip = MemoryChip::new(MemoryChipType::Initialize);
@@ -210,8 +210,8 @@ mod tests {
         let mut challenger = config.challenger();
 
         let program = simple_program();
-        let mut runtime = Runtime::new(program);
-        runtime.run();
+        let mut runtime = Runtime::new(program, SP1CoreOpts::default());
+        runtime.run().unwrap();
 
         let chip = MemoryChip::new(MemoryChipType::Initialize);
 
@@ -228,8 +228,8 @@ mod tests {
         setup_logger();
         let program = sha_extend_program();
         let program_clone = program.clone();
-        let mut runtime = Runtime::new(program);
-        runtime.run();
+        let mut runtime = Runtime::new(program, SP1CoreOpts::default());
+        runtime.run().unwrap();
         let machine: crate::stark::StarkMachine<BabyBearPoseidon2, RiscvAir<BabyBear>> =
             RiscvAir::machine(BabyBearPoseidon2::new());
         let (pkey, _) = machine.setup(&program_clone);
@@ -251,8 +251,8 @@ mod tests {
         setup_logger();
         let program = sha_extend_program();
         let program_clone = program.clone();
-        let mut runtime = Runtime::new(program);
-        runtime.run();
+        let mut runtime = Runtime::new(program, SP1CoreOpts::default());
+        runtime.run().unwrap();
         let machine = RiscvAir::machine(BabyBearPoseidon2::new());
         let (pkey, _) = machine.setup(&program_clone);
         let shards = machine.shard(
