@@ -234,7 +234,18 @@ impl SP1Prover {
         stdin: &SP1Stdin,
     ) -> Result<(usize, SP1PublicValues), ExecutionError> {
         let program = Program::from(elf);
-        let opts = SP1CoreOpts::default();
+        let mut opts = SP1CoreOpts::default();
+
+        // FIXME: tmp, wait for merge from dev to main
+        opts.shard_size = std::env::var("SHARD_SIZE")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+        opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
         let mut runtime = Runtime::new(program, opts);
         runtime.write_vecs(&stdin.buffer);
         for (proof, vkey) in stdin.proofs.iter() {
@@ -283,7 +294,18 @@ impl SP1Prover {
     ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>, SP1CoreProverError> {
         let config = CoreSC::default();
         let program = Program::from(&pk.elf);
-        let opts = SP1CoreOpts::default();
+        let mut opts = SP1CoreOpts::default();
+
+        // FIXME: tmp, wait for merge from dev to main
+        opts.shard_size = std::env::var("SHARD_SIZE")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+        opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
         let proof = sp1_core::utils::prove_partial(program, stdin, config, opts, checkoint_nb)?;
         Ok(proof)
     }
