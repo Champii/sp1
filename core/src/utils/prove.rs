@@ -304,6 +304,7 @@ where
             );
         }
     };
+    println!("CHECKPOINTS: {}", checkpoints.len());
 
     // For each checkpoint, generate events, shard them, commit shards, and observe in challenger.
     let sharding_config = ShardingConfig::default();
