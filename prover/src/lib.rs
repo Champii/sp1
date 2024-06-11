@@ -300,11 +300,11 @@ impl SP1Prover {
         opts.shard_size = std::env::var("SHARD_SIZE")
             .unwrap()
             .parse::<usize>()
-            .unwrap();
+            .unwrap_or(opts.shard_size);
         opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
             .unwrap()
             .parse::<usize>()
-            .unwrap();
+            .unwrap_or(opts.shard_size);
 
         let proof = sp1_core::utils::prove_partial(program, stdin, config, opts, checkoint_nb)?;
         Ok(proof)
