@@ -232,16 +232,13 @@ impl SP1Prover {
     pub fn nb_checkpoints(
         elf: &[u8],
         stdin: &SP1Stdin,
-    ) -> Result<(usize, SP1PublicValues), ExecutionError> {
+        nb_workers: usize,
+    ) -> Result<(usize, SP1CoreOpts, SP1PublicValues), ExecutionError> {
+        // nb_checkpoints, sp1_core_opts, public_values
         let program = Program::from(elf);
         let mut opts = SP1CoreOpts::default();
 
-        // FIXME: tmp, wait for merge from dev to main
         opts.shard_size = std::env::var("SHARD_SIZE")
-            .unwrap_or(opts.shard_size.to_string())
-            .parse::<usize>()
-            .unwrap_or(opts.shard_size);
-        opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
             .unwrap_or(opts.shard_size.to_string())
             .parse::<usize>()
             .unwrap_or(opts.shard_size);
@@ -253,10 +250,20 @@ impl SP1Prover {
         }
         runtime.run()?;
 
-        let nb_checkpoints =
-            runtime.record.cpu_events.last().unwrap().shard as f64 / opts.shard_batch_size as f64;
+        let nb_shards =
+            (runtime.record.cpu_events.len() as f64 / opts.shard_size as f64).ceil() as usize;
+
+        opts.shard_batch_size = (nb_shards as f64 / nb_workers as f64).ceil() as usize;
+
+        let nb_checkpoints = (nb_shards as f64 / opts.shard_batch_size as f64).ceil() as usize;
+
+        println!("nb_shards: {}", nb_shards);
+        println!("shard_batch_size: {}", opts.shard_batch_size);
+        println!("nb_checkpoints: {}", nb_checkpoints);
+
         Ok((
-            nb_checkpoints.ceil() as usize,
+            nb_checkpoints,
+            opts,
             SP1PublicValues::from(&runtime.state.public_values_stream),
         ))
     }
@@ -286,18 +293,15 @@ impl SP1Prover {
         &self,
         pk: &SP1ProvingKey,
         stdin: &SP1Stdin,
+        shard_batch_size: usize,
         checkoint_nb: usize,
     ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>, SP1CoreProverError> {
         let config = CoreSC::default();
         let program = Program::from(&pk.elf);
         let mut opts = SP1CoreOpts::default();
+        opts.shard_batch_size = shard_batch_size;
 
-        // FIXME: tmp, wait for merge from dev to main
         opts.shard_size = std::env::var("SHARD_SIZE")
-            .unwrap_or(opts.shard_size.to_string())
-            .parse::<usize>()
-            .unwrap_or(opts.shard_size);
-        opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
             .unwrap_or(opts.shard_size.to_string())
             .parse::<usize>()
             .unwrap_or(opts.shard_size);

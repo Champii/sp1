@@ -49,9 +49,12 @@ impl Prover for DistributedProver {
         &self,
         pk: &SP1ProvingKey,
         stdin: SP1Stdin,
+        shard_batch_size: usize,
         checkpoint_nb: usize,
     ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>> {
-        let proof = self.prover.prove_core_partial(pk, &stdin, checkpoint_nb)?;
+        let proof = self
+            .prover
+            .prove_core_partial(pk, &stdin, shard_batch_size, checkpoint_nb)?;
         Ok(proof)
     }
 

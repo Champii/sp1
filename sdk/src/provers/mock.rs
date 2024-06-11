@@ -51,6 +51,7 @@ impl Prover for MockProver {
         &self,
         _pk: &SP1ProvingKey,
         _stdin: SP1Stdin,
+        _shard_batch_size: usize,
         _checkpoint_nb: usize,
     ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>> {
         unimplemented!()

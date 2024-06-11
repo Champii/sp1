@@ -29,6 +29,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp1_core::{
     runtime::ExecutionReport,
     stark::{MachineVerificationError, ShardProof},
+    utils::SP1CoreOpts,
 };
 pub use sp1_prover::{
     CoreSC, HashableKey, InnerSC, OuterSC, PlonkBn254Proof, SP1Prover, SP1ProvingKey,
@@ -206,8 +207,13 @@ impl ProverClient {
         Ok(SP1Prover::execute(elf, &stdin)?)
     }
 
-    pub fn nb_checkpoints(&self, elf: &[u8], stdin: SP1Stdin) -> Result<(usize, SP1PublicValues)> {
-        Ok(SP1Prover::nb_checkpoints(elf, &stdin)?)
+    pub fn nb_checkpoints(
+        &self,
+        elf: &[u8],
+        stdin: SP1Stdin,
+        nb_workers: usize,
+    ) -> Result<(usize, SP1CoreOpts, SP1PublicValues)> {
+        Ok(SP1Prover::nb_checkpoints(elf, &stdin, nb_workers)?)
     }
 
     /// Setup a program to be proven and verified by the SP1 RISC-V zkVM by computing the proving
@@ -264,9 +270,11 @@ impl ProverClient {
         &self,
         pk: &SP1ProvingKey,
         stdin: SP1Stdin,
+        shard_batch_size: usize,
         checkpoint_nb: usize,
     ) -> Result<Vec<ShardProof<CoreSC>>> {
-        self.prover.prove_partial(pk, stdin, checkpoint_nb)
+        self.prover
+            .prove_partial(pk, stdin, shard_batch_size, checkpoint_nb)
     }
 
     /// Proves the execution of the given program with the given input in the compressed mode.

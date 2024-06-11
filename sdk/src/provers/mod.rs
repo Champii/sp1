@@ -41,6 +41,7 @@ pub trait Prover: Send + Sync {
         &self,
         pk: &SP1ProvingKey,
         stdin: SP1Stdin,
+        shard_batch_size: usize,
         checkpoint_nb: usize,
     ) -> Result<Vec<ShardProof<BabyBearPoseidon2>>>;
 
