@@ -311,7 +311,10 @@ where
     let mut shard_main_datas = Vec::new();
     let mut challenger = machine.config().challenger();
     vk.observe_into(&mut challenger);
-    if let Some(checkpoint_file) = checkpoints.iter_mut().nth(checkpoint_id) {
+
+    let mut checkpoint_shards_vec = Vec::new();
+
+    for checkpoint_file in checkpoints.iter_mut() {
         let mut record = trace_checkpoint(program.clone(), checkpoint_file, opts);
         record.public_values = public_values;
         reset_seek(&mut *checkpoint_file);
@@ -330,21 +333,25 @@ where
             challenger.observe(commitment);
             challenger.observe_slice(&shard.public_values::<SC::Val>()[0..machine.num_pv_elts()]);
         }
+        checkpoint_shards_vec.push(checkpoint_shards);
     }
 
     // For each checkpoint, generate events and shard again, then prove the shards.
     let mut shard_proofs = Vec::<ShardProof<SC>>::new();
-    let mut checkpoint_file = checkpoints.into_iter().nth(checkpoint_id).unwrap();
+    // let mut checkpoint_file = checkpoints.into_iter().nth(checkpoint_id).unwrap();
 
-    let checkpoint_shards = {
+    /* let checkpoint_shards = {
         let mut events = trace_checkpoint(program.clone(), &checkpoint_file, opts);
         events.public_values = public_values;
         reset_seek(&mut checkpoint_file);
         tracing::debug_span!("shard").in_scope(|| machine.shard(events, &sharding_config))
-    };
+    }; */
 
     log::info!("Starting proof shard");
-    let mut checkpoint_proofs = checkpoint_shards
+    let mut checkpoint_proofs = checkpoint_shards_vec
+        .into_iter()
+        .nth(checkpoint_id)
+        .unwrap()
         .into_iter()
         .map(|shard| {
             let config = machine.config();
