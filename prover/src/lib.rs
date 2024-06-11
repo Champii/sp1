@@ -238,11 +238,11 @@ impl SP1Prover {
 
         // FIXME: tmp, wait for merge from dev to main
         opts.shard_size = std::env::var("SHARD_SIZE")
-            .unwrap()
+            .unwrap_or(opts.shard_size.to_string())
             .parse::<usize>()
             .unwrap_or(opts.shard_size);
         opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
-            .unwrap()
+            .unwrap_or(opts.shard_size.to_string())
             .parse::<usize>()
             .unwrap_or(opts.shard_size);
 
@@ -298,11 +298,11 @@ impl SP1Prover {
 
         // FIXME: tmp, wait for merge from dev to main
         opts.shard_size = std::env::var("SHARD_SIZE")
-            .unwrap()
+            .unwrap_or(opts.shard_size.to_string())
             .parse::<usize>()
             .unwrap_or(opts.shard_size);
         opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
-            .unwrap()
+            .unwrap_or(opts.shard_size.to_string())
             .parse::<usize>()
             .unwrap_or(opts.shard_size);
 
