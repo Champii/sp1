@@ -252,13 +252,9 @@ impl SP1Prover {
             runtime.write_proof(proof.clone(), vkey.clone());
         }
         runtime.run()?;
-        let shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
-            .unwrap()
-            .parse::<usize>()
-            .unwrap();
 
         let nb_checkpoints =
-            runtime.record.cpu_events.last().unwrap().shard as f64 / shard_batch_size as f64;
+            runtime.record.cpu_events.last().unwrap().shard as f64 / opts.shard_batch_size as f64;
         Ok((
             nb_checkpoints.ceil() as usize,
             SP1PublicValues::from(&runtime.state.public_values_stream),
