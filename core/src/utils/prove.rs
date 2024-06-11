@@ -342,10 +342,12 @@ where
         tracing::debug_span!("shard").in_scope(|| machine.shard(events, &sharding_config))
     };
 
+    log::info!("Starting proof shard");
     let mut checkpoint_proofs = checkpoint_shards
         .into_iter()
         .map(|shard| {
             let config = machine.config();
+            log::info!("Commit main");
             let shard_data =
                 LocalProver::commit_main(config, &machine, &shard, shard.index() as usize);
 
@@ -354,6 +356,8 @@ where
                 .shard_chips_ordered(&chip_ordering)
                 .collect::<Vec<_>>()
                 .to_vec();
+
+            log::info!("Actually prove shard");
             LocalProver::prove_shard(
                 config,
                 &pk,
