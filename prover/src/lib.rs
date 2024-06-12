@@ -243,6 +243,11 @@ impl SP1Prover {
             .parse::<usize>()
             .unwrap_or(opts.shard_size);
 
+        opts.shard_batch_size = std::env::var("SHARD_BATCH_SIZE")
+            .unwrap_or(opts.shard_batch_size.to_string())
+            .parse::<usize>()
+            .unwrap_or(opts.shard_batch_size);
+
         let mut runtime = Runtime::new(program, opts);
         runtime.write_vecs(&stdin.buffer);
         for (proof, vkey) in stdin.proofs.iter() {
