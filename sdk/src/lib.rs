@@ -18,6 +18,10 @@ pub mod network;
 pub use crate::network::prover::NetworkProver;
 
 pub mod proof;
+
+pub mod distributed;
+pub use distributed::{serve_worker, DistributedProver};
+
 pub mod provers;
 pub mod utils {
     pub use sp1_core::utils::setup_logger;
@@ -51,6 +55,8 @@ impl ProverClient {
     /// - `local` (default): Uses [LocalProver]. Recommended for proving end-to-end locally.
     /// - `mock`: Uses [MockProver]. Recommended for testing and development.
     /// - `network`: Uses [NetworkProver]. Recommended for outsourcing proof generation to an RPC.
+    /// - `distributed`: Uses [DistributedProver]. Recommended for outsourcing proof generation to
+    /// multiple workers.
     ///
     /// ### Examples
     ///
@@ -72,6 +78,11 @@ impl ProverClient {
             "local" => Self {
                 prover: Box::new(LocalProver::new()),
             },
+            "distributed" => {
+                Self {
+                    prover: Box::new(DistributedProver::new()),
+                }
+            }
             "network" => {
                 cfg_if! {
                     if #[cfg(feature = "network")] {
@@ -122,6 +133,25 @@ impl ProverClient {
     pub fn local() -> Self {
         Self {
             prover: Box::new(LocalProver::new()),
+        }
+    }
+
+    /// Creates a new [ProverClient] with the distributed prover.
+    ///
+    /// Recommended for outsourcing proof generation to multiple workers. You can also use
+    /// [ProverClient::new] to set the prover to `distributed` with the `SP1_PROVER` enviroment
+    /// variable.
+    ///
+    /// ### Examples
+    ///
+    /// ```no_run
+    /// use sp1_sdk::ProverClient;
+    ///
+    /// let client = ProverClient::distributed();
+    /// ```
+    pub fn distributed() -> Self {
+        Self {
+            prover: Box::new(DistributedProver::new()),
         }
     }
 

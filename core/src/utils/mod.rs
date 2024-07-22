@@ -6,6 +6,7 @@ mod options;
 #[cfg(any(test, feature = "programs"))]
 mod programs;
 mod prove;
+pub mod prove_distributed;
 mod serde;
 mod tracer;
 

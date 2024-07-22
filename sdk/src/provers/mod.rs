@@ -29,6 +29,7 @@ pub enum ProverType {
     Local,
     Mock,
     Network,
+    Distributed,
 }
 
 #[derive(Error, Debug)]
